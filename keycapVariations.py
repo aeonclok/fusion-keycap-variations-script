@@ -1,4 +1,4 @@
-# --- Script: Generate Keycap Variants using addNewComponentCopy (Paste New Equivalent) ---
+# --- Script: Generate Keycap Variants using addNewComponentCopy with Two-Phase Placement ---
 
 import adsk.core, adsk.fusion, traceback
 
@@ -19,7 +19,6 @@ ROW_PROFILES = {
 }
 
 U_UNIT_CM = 1.9  # spacing in cm
-
 
 def run(context):
     ui = None
@@ -52,47 +51,44 @@ def run(context):
             ui.messageBox(f"No parameter starting with '{target}' was found in base component.")
             return False
 
-        # Track cumulative width per row in U
+        # Phase 1: Create all variations without placement
         row_offsets = {}
         index = 0
+        created_occs = []
 
         for row, width in VARIANTS:
             height, angle = ROW_PROFILES.get(row, (10, 6))
 
-            # Determine placement offset BEFORE modifying the base component
-            current_offset_u = row_offsets.get(row, 0)
-            x_offset_cm = (current_offset_u + width / 2) * U_UNIT_CM
-            y_offset_cm = row * U_UNIT_CM
-
-            # Ensure new transform object each loop
-            transform = adsk.core.Matrix3D.create()
-            translation = adsk.core.Vector3D.create(x_offset_cm, y_offset_cm, 0)
-            transform.translation = translation
-
-            # Debug placement info
-            ui.messageBox(f"Placement for keycap_r{row}_w{width:.2f}_{index} at ({x_offset_cm}, {y_offset_cm}, 0)\nVector: {translation.x}, {translation.y}, {translation.z}")
-
-            # 1. Set the parameters on the original component
+            # Set parameters on base BEFORE copying
             set_param(base_params, 'uWidth', f"{width} mm")
             set_param(base_params, 'height', f"{height} mm")
             set_param(base_params, 'topAngle', f"{angle} deg")
             design.computeAll()
 
-            # 2. Create a copy using addNewComponentCopy
+            # Use identity transform
+            transform = adsk.core.Matrix3D.create()
             new_occ = rootComp.occurrences.addNewComponentCopy(base_comp, transform)
-
             if not new_occ:
                 ui.messageBox("addNewComponentCopy failed.")
                 continue
 
             new_comp = new_occ.component
-
-            # 3. Rename the newly created component
-            variant_name = f"keycap_r{row}_w{width:.2f}_{index}"
-            new_comp.name = variant_name
+            new_comp.name = f"keycap_r{row}_w{width:.2f}_{index}"
+            created_occs.append((new_occ, row, width))
             index += 1
 
-            # Update offset
+        # Phase 2: Move all components to final position
+        row_offsets = {}
+        for occ_data in created_occs:
+            occ, row, width = occ_data
+            current_offset_u = row_offsets.get(row, 0)
+            x_offset_cm = (current_offset_u + width / 2) * U_UNIT_CM
+            y_offset_cm = row * U_UNIT_CM
+
+            move = adsk.core.Matrix3D.create()
+            move.translation = adsk.core.Vector3D.create(x_offset_cm, y_offset_cm, 0)
+            occ.transform = move
+
             row_offsets[row] = current_offset_u + width
 
     except:
