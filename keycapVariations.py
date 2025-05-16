@@ -4,18 +4,18 @@ import adsk.core, adsk.fusion, traceback
 
 # Variants to create as unique copies of the master keycap
 VARIANTS = [
-    (1, 1),
-    (1, 1.25),
-    (2, 1),
-    (2, 1.25),
+    (1, 1.25), (1, 1),
+    (2, 1.75), (2, 1),
+    (3, 1.25), (3, 1),
+    (4, 1),
 ]
 
-# Row profile data (height in mm, top angle in deg)
+# Row profile data (user parameter names for height and top angle)
 ROW_PROFILES = {
-    1: (11, 2),
-    2: (14, 9),
-    3: (18, 15),
-    4: (18, 15)
+    1: ("row1Height", "row1Angle"),
+    2: ("row2Height", "row2Angle"),
+    3: ("row3Height", "row3Angle"),
+    4: ("row4Height", "row4Angle")
 }
 
 U_UNIT_CM = 1.9  # spacing in cm
@@ -40,7 +40,7 @@ def run(context):
             for p in params:
                 if p.name.lower().startswith(target.lower()):
                     try:
-                        if 'mm' in value or 'deg' in value:
+                        if isinstance(value, str):
                             p.expression = value
                         else:
                             p.value = float(value)
@@ -57,12 +57,12 @@ def run(context):
         created_occs = []
 
         for row, width in VARIANTS:
-            height, angle = ROW_PROFILES.get(row, (10, 6))
+            height_param, angle_param = ROW_PROFILES.get(row, ("10", "6"))
 
             # Set parameters on base BEFORE copying
             set_param(base_params, 'uWidth', f"{width} mm")
-            set_param(base_params, 'height', f"{height} mm")
-            set_param(base_params, 'topAngle', f"{angle} deg")
+            set_param(base_params, 'height', height_param)
+            set_param(base_params, 'topAngle', angle_param)
             design.computeAll()
 
             # Use identity transform
